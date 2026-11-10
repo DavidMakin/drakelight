@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
       - name: Install tooling
         run: |
-          pip install pytest ruff
+          pip install pytest ruff==0.17.4
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream fakeroot
       - run: ruff check .
@@ -32,3 +32,22 @@ jobs:
         run: |
           bash packaging/build-deb.sh
           dpkg-deb -I dist/*.deb
+
+  packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-dev libadwaita-1-dev \
+            rpm ruby ruby-dev build-essential curl file
+          sudo gem install --no-document fpm -v 1.16.0
+      - name: Build .rpm and AppImage
+        run: |
+          bash packaging/build-rpm.sh
+          bash packaging/build-appimage.sh
+      - name: Smoke-test the AppImage
+        run: |
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/Drakelight-*-x86_64.AppImage --version
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/Drakelight-*-x86_64.AppImage check

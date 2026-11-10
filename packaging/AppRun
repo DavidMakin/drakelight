@@ -4,6 +4,7 @@ export APPDIR="$HERE"
 for hook in "$HERE"/apprun-hooks/*.sh; do
     [ -f "$hook" ] && . "$hook"
 done
+export DRAKELIGHT_HOST_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export PYTHONHOME="$HERE/usr"
 export PYTHONPATH="$HERE/usr/lib/python3/dist-packages:$HERE/usr/lib/drakelight"
 export PYTHONDONTWRITEBYTECODE=1

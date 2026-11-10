@@ -1,18 +1,33 @@
 import argparse
 import json
+import os
 
 from . import __version__, lighting
 from .hidraw import DeviceError, Keyboard
 
 
 def _hex(s):
-    s = s.lstrip("#")
-    if len(s) != 6:
-        raise argparse.ArgumentTypeError("colour must be RRGGBB")
-    return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+    try:
+        return lighting.parse_hex(s)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
+def _restore_host_env():
+    """Undo the AppImage's library and Python overrides so programs we launch see the host environment."""
+    if "DRAKELIGHT_HOST_LD_LIBRARY_PATH" not in os.environ:
+        return
+    host = os.environ.pop("DRAKELIGHT_HOST_LD_LIBRARY_PATH")
+    if host:
+        os.environ["LD_LIBRARY_PATH"] = host
+    else:
+        os.environ.pop("LD_LIBRARY_PATH", None)
+    for var in ("PYTHONHOME", "PYTHONPATH"):
+        os.environ.pop(var, None)
 
 
 def main(argv=None):
+    _restore_host_env()
     ap = argparse.ArgumentParser(prog="drakelight")
     ap.add_argument("--version", action="version", version=f"drakelight {__version__}")
     sub = ap.add_subparsers(dest="cmd")

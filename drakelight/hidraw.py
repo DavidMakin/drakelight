@@ -20,6 +20,10 @@ class DeviceError(Exception):
     pass
 
 
+class NotFoundError(DeviceError):
+    """No matching keyboard is plugged in."""
+
+
 class AccessError(DeviceError):
     """The hidraw node exists but this user may not open it."""
 
@@ -28,28 +32,39 @@ def _ioc(nr, size):
     return (3 << 30) | (size << 16) | (ord("H") << 8) | nr
 
 
+def _uevent(name):
+    try:
+        with open(f"/sys/class/hidraw/{name}/device/uevent") as f:
+            return dict(line.split("=", 1) for line in f.read().splitlines() if "=" in line)
+    except OSError:
+        return {}
+
+
 def find_device():
-    want = f"HID_ID=0003:{VID:08X}:{PID:08X}"
+    want = f"0003:{VID:08X}:{PID:08X}"
     for path in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
-        try:
-            with open(os.path.join(path, "device/uevent")) as f:
-                uevent = f.read()
-        except OSError:
-            continue
-        if want in uevent and "/input1" in uevent:
-            return "/dev/" + os.path.basename(path)
-    raise DeviceError("Keyboard 258a:0049 not found. Plug it in via USB-C and switch to wired mode.")
+        name = os.path.basename(path)
+        info = _uevent(name)
+        if info.get("HID_ID") == want and info.get("HID_PHYS", "").endswith("/input1"):
+            return "/dev/" + name
+    raise NotFoundError("Keyboard 258a:0049 not found. Plug it in via USB-C and switch to wired mode.")
 
 
 class Keyboard:
     def __init__(self, path=None):
         self.path = path or find_device()
+        self.identity = _uevent(os.path.basename(self.path)).get("HID_PHYS", "")
         try:
             self.fd = os.open(self.path, os.O_RDWR)
         except PermissionError:
             raise AccessError(
                 f"No permission to open {self.path}. "
                 "Run `drakelight setup-access` once, then replug the keyboard.") from None
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(self.fd)
+            raise DeviceError("Another Drakelight window or command is using the keyboard.") from None
 
     def close(self):
         os.close(self.fd)

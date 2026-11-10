@@ -42,7 +42,7 @@ ARGS=(--appdir "$APPDIR" --plugin gtk --custom-apprun "$BUILD/AppRun"
       --desktop-file "data/$APP_ID.desktop" --icon-file "data/$APP_ID.svg"
       --executable "$APPDIR/usr/bin/python3")
 for lib in libgtk-4.so.1 libadwaita-1.so.0; do
-    ARGS+=(--library "$(ldconfig -p | awk -v l="$lib" '$1 == l {print $NF; exit}')")
+    ARGS+=(--library "$(ldconfig -p | awk -v l="$lib" '$1 == l && !f {print $NF; f=1}')")
 done
 while IFS= read -r so; do ARGS+=(--library "$so"); done < <(find "$APPDIR/usr/lib" -name '*.so' -o -name '*.so.*' | sort)
 

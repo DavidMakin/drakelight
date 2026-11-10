@@ -83,7 +83,7 @@ jobs:
 
       - name: Build changelog
         run: |
-          PREV=$(git tag --sort=-version:refname | grep -vx "${GITHUB_REF_NAME}" | head -1 || true)
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
           RANGE="${PREV:+${PREV}..}${GITHUB_REF_NAME}"
           git log "${RANGE}" --pretty=format:"%s" --no-merges > /tmp/commits.txt || true
 
