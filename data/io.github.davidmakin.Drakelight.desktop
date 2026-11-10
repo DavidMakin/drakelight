@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Drakelight
+GenericName=Keyboard Lighting
+Comment=Control the lighting of a Redragon K631 keyboard
+Exec=drakelight
+Icon=io.github.davidmakin.Drakelight
+Terminal=false
+Categories=Settings;HardwareSettings;GTK;
+Keywords=keyboard;rgb;lighting;backlight;redragon;k631;
+StartupWMClass=io.github.davidmakin.Drakelight

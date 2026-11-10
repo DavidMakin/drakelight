@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' drakelight/__init__.py)"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match drakelight/__init__.py version v${version}" >&2
+            exit 1
+          fi
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+            desktop-file-utils appstream fakeroot rpm ruby ruby-dev build-essential curl file python3-pytest
+          sudo gem install --no-document fpm -v 1.16.0
+
+      - name: Test
+        run: python3 -m pytest -q
+
+      - name: Source tarball (.tar.gz)
+        run: make dist
+
+      - name: Debian package (.deb)
+        run: bash packaging/build-deb.sh
+
+      - name: RPM package (.rpm)
+        run: bash packaging/build-rpm.sh
+
+      - name: AppImage
+        run: bash packaging/build-appimage.sh
+
+      - name: Smoke-test the AppImage and the .deb
+        run: |
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/Drakelight-*-x86_64.AppImage --version
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist/Drakelight-*-x86_64.AppImage check
+          sudo apt-get install -y ./dist/drakelight_*_all.deb
+          drakelight --version
+          drakelight check
+          test -f /usr/share/applications/io.github.davidmakin.Drakelight.desktop
+          test -f /usr/share/icons/hicolor/scalable/apps/io.github.davidmakin.Drakelight.svg
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

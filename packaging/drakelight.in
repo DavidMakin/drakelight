@@ -1,0 +1,3 @@
+#!/bin/sh
+# System Python: the GTK bindings are distro packages and are absent from venv/asdf interpreters.
+exec env PYTHONPATH="@LIBDIR@/drakelight${PYTHONPATH:+:$PYTHONPATH}" /usr/bin/python3 -m drakelight "$@"

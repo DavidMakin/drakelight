@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drakelight"
+dynamic = ["version"]
+description = "Keyboard lighting control for the Redragon K631"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+[project.scripts]
+drakelight = "drakelight.cli:main"
+
+[tool.setuptools]
+packages = ["drakelight"]
+
+[tool.setuptools.dynamic]
+version = { attr = "drakelight.__version__" }
+
+[tool.setuptools.package-data]
+drakelight = ["data/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+per-file-ignores = { "drakelight/gui_gtk.py" = ["E402"], "drakelight/cli.py" = ["E402"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

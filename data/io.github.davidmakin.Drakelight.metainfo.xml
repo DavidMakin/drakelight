@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.davidmakin.Drakelight</id>
+  <name>Drakelight</name>
+  <summary>Keyboard lighting control for the Redragon K631</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="io.github.davidmakin">
+    <name>David Makin</name>
+  </developer>
+  <description>
+    <p>Choose onboard lighting effects, colours, brightness and speed for a wired Redragon K631 keyboard and save them to the keyboard. Browse all 20 effects as live animated previews.</p>
+    <p>Drakelight is an unofficial, independent project and is not affiliated with Redragon.</p>
+  </description>
+  <url type="homepage">https://github.com/DavidMakin/drakelight</url>
+  <url type="bugtracker">https://github.com/DavidMakin/drakelight/issues</url>
+  <launchable type="desktop-id">io.github.davidmakin.Drakelight.desktop</launchable>
+  <provides>
+    <binary>drakelight</binary>
+  </provides>
+  <categories>
+    <category>Settings</category>
+    <category>HardwareSettings</category>
+  </categories>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-10"/>
+  </releases>
+</component>
