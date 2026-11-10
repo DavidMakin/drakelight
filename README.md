@@ -1,4 +1,8 @@
-# Drakelight
+<p align="center">
+  <img src="docs/img/logo.svg" alt="Drakelight logo" width="128">
+</p>
+
+<h1 align="center">Drakelight</h1>
 
 ![Coded with AI](https://img.shields.io/badge/Coded_with-AI-8a2be2?style=for-the-badge)
 
