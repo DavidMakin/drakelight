@@ -8,6 +8,11 @@ nothing needs to keep running afterwards.
 
 Drakelight is an unofficial, independent project and is not affiliated with Redragon.
 
+<p align="center">
+  <img src="docs/screenshots/dark.png" alt="Drakelight in dark mode" width="48%">
+  <img src="docs/screenshots/light.png" alt="Drakelight in light mode" width="48%">
+</p>
+
 ## Supported hardware
 
 | | |
