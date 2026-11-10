@@ -10,9 +10,16 @@ else
 UDEVDIR ?= /etc/udev/rules.d
 endif
 
-.PHONY: install uninstall dist test clean
+RELEASE_DATE := $(shell date -u -d @$${SOURCE_DATE_EPOCH:-$$(date +%s)} +%F)
+METAINFO := build/$(APP_ID).metainfo.xml
 
-install:
+.PHONY: install uninstall dist test clean metainfo
+
+metainfo:
+	@mkdir -p build
+	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@DATE@|$(RELEASE_DATE)|' data/$(APP_ID).metainfo.xml > $(METAINFO)
+
+install: metainfo
 	install -d $(DESTDIR)$(LIBDIR)/drakelight
 	cp -r drakelight $(DESTDIR)$(LIBDIR)/drakelight/
 	find $(DESTDIR)$(LIBDIR)/drakelight -name __pycache__ -prune -exec rm -rf {} +
@@ -21,7 +28,7 @@ install:
 	chmod 755 $(DESTDIR)$(PREFIX)/bin/drakelight
 	install -Dm644 data/$(APP_ID).desktop $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop
 	install -Dm644 data/$(APP_ID).svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(APP_ID).svg
-	install -Dm644 data/$(APP_ID).metainfo.xml $(DESTDIR)$(PREFIX)/share/metainfo/$(APP_ID).metainfo.xml
+	install -Dm644 $(METAINFO) $(DESTDIR)$(PREFIX)/share/metainfo/$(APP_ID).metainfo.xml
 	install -Dm644 drakelight/data/70-drakelight.rules $(DESTDIR)$(UDEVDIR)/70-drakelight.rules
 	@echo "Installed. Update caches with: gtk-update-icon-cache -f $(PREFIX)/share/icons/hicolor; update-desktop-database; udevadm control --reload"
 

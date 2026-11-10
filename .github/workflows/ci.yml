@@ -26,7 +26,8 @@ jobs:
       - name: Validate desktop entry and appstream data
         run: |
           desktop-file-validate data/*.desktop
-          appstreamcli validate --no-net data/*.metainfo.xml
+          make metainfo
+          appstreamcli validate --no-net build/*.metainfo.xml
       - name: Build .deb
         run: |
           bash packaging/build-deb.sh

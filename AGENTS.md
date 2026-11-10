@@ -30,7 +30,7 @@ dependencies beyond the distro's PyGObject.
 
 - Commit subjects use conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`, `build:`, `chore:`). The release
   workflow groups notes by them.
-- Releasing: bump `__version__` in `drakelight/__init__.py` and the release entry in the metainfo, commit, then
-  `git tag vX.Y.Z && git push --tags`. The workflow fails if the tag and `__version__` differ.
+- Releasing: bump `__version__` in `drakelight/__init__.py` (the only place the version lives; the CLI, About dialog,
+  packages and metainfo all read it), commit, then `git tag -a vX.Y.Z -m "..." && git push --tags`. The workflow fails if the tag and `__version__` differ.
 - Keep the two UI themes (light and dark) working; check both when changing styling.
 - No AI attribution in commits or PRs.

@@ -102,9 +102,9 @@ launcher uses `/usr/bin/python3`. Run from a checkout with `PYTHONPATH=. /usr/bi
 
 ### Releasing
 
-1. Bump `__version__` in `drakelight/__init__.py` and the release entry in
-   `data/io.github.davidmakin.Drakelight.metainfo.xml`.
-2. Commit, then `git tag vX.Y.Z && git push --tags`.
+1. Bump `__version__` in `drakelight/__init__.py`. It is the only place the version is set: the CLI, the About
+   dialog, the packages and the AppStream release entry all read it.
+2. Commit, then `git tag -a vX.Y.Z -m "Drakelight X.Y.Z" && git push --tags`.
 
 The **Release** workflow tests, builds the `.tar.gz`, `.deb`, `.rpm` and `.AppImage`, smoke-tests the AppImage and
 the `.deb`, and publishes them with a `SHA256SUMS` file. Run it manually from the Actions tab to build the

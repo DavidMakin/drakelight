@@ -12,7 +12,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import access, lighting, preview_fx  # noqa: E402
+from . import __version__, access, lighting, preview_fx  # noqa: E402
 from .hidraw import AccessError, DeviceError, Keyboard, find_device  # noqa: E402
 
 APP_ID = "io.github.davidmakin.Drakelight"
@@ -196,11 +196,17 @@ class Window(Adw.ApplicationWindow):
         recovery = Gio.Menu()
         recovery.append("Restore original lighting…", "win.restore")
         menu.append_section("Recovery", recovery)
+        about = Gio.Menu()
+        about.append("About Drakelight", "win.about")
+        menu.append_section(None, about)
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
                                        tooltip_text="Appearance and recovery"))
         restore = Gio.SimpleAction.new("restore", None)
         restore.connect("activate", self.on_restore)
         self.add_action(restore)
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self.on_about)
+        self.add_action(about_action)
 
         self.banner = Adw.Banner(revealed=False)
         self.banner.connect("button-clicked", self.on_enable_access)
@@ -549,6 +555,14 @@ class Window(Adw.ApplicationWindow):
             self.load_state(st)
             self.toasts.add_toast(Adw.Toast(title="Saved to keyboard"))
         self.run(lambda: lighting.apply(**args), done, "Saving…")
+
+    def on_about(self, *_):
+        Adw.AboutDialog(
+            application_name="Drakelight", application_icon=APP_ID, version=__version__,
+            developer_name="David Makin", website="https://github.com/DavidMakin/drakelight",
+            issue_url="https://github.com/DavidMakin/drakelight/issues", license_type=Gtk.License.MIT_X11,
+            comments="Keyboard lighting control for the Redragon K631. Unofficial and not affiliated with Redragon.",
+        ).present(self)
 
     def on_restore(self, *_):
         dlg = Adw.AlertDialog(
