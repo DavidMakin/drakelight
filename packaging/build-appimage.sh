@@ -28,7 +28,7 @@ install -m755 packaging/AppRun "$APPDIR/AppRun"
 PYV="$(/usr/bin/python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 install -Dm755 "$(readlink -f /usr/bin/python$PYV)" "$APPDIR/usr/bin/python3"
 mkdir -p "$APPDIR/usr/lib/python$PYV" "$APPDIR/usr/lib/python3/dist-packages"
-(cd /usr/lib/python$PYV && tar cf - --exclude='test' --exclude='tests' --exclude='idlelib' --exclude='tkinter' \
+(cd /usr/lib/python$PYV && tar cf - --exclude='test' --exclude='tests' --exclude='idlelib' --exclude='config-*' --exclude='tkinter' \
     --exclude='turtledemo' --exclude='ensurepip' --exclude='__pycache__' --exclude='site-packages' \
     --exclude='dist-packages' .) | (cd "$APPDIR/usr/lib/python$PYV" && tar xf -)
 for mod in gi cairo; do
