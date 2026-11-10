@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Check tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -59,7 +59,7 @@ jobs:
         working-directory: dist
         run: sha256sum -- * > SHA256SUMS
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: packages
           path: dist/*
@@ -76,14 +76,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: packages
           path: dist
 
       - name: Build changelog
         run: |
-          PREV=$(git tag --sort=-version:refname | grep -vx "${GITHUB_REF_NAME}" | head -1 || true)
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
           RANGE="${PREV:+${PREV}..}${GITHUB_REF_NAME}"
           git log "${RANGE}" --pretty=format:"%s" --no-merges > /tmp/commits.txt || true
 

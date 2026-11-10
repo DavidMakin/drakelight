@@ -13,7 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import __version__, access, lighting, preview_fx  # noqa: E402
-from .hidraw import AccessError, DeviceError, Keyboard, find_device  # noqa: E402
+from .hidraw import AccessError, DeviceError, Keyboard, NotFoundError, find_device  # noqa: E402
 
 APP_ID = "io.github.davidmakin.Drakelight"
 SETTINGS = os.path.join(lighting.CONFIG_DIR, "settings.json")
@@ -158,6 +158,11 @@ class Swatch(Gtk.DrawingArea):
             cr.stroke()
 
 
+def clamped_levels(st, m):
+    """Brightness and speed as the sliders can show them (0-4 and 1-4)."""
+    return min(4, st.brightness(m)), min(4, max(1, st.speed(m)))
+
+
 def run_async(fn, done):
     def worker():
         try:
@@ -166,6 +171,8 @@ def run_async(fn, done):
             res, err = None, e
         except OSError as e:
             res, err = None, DeviceError(f"I/O error: {e}")
+        except Exception as e:
+            res, err = None, DeviceError(f"unexpected error: {e}")
         GLib.idle_add(done, res, err)
     threading.Thread(target=worker, daemon=True).start()
 
@@ -176,6 +183,8 @@ class Window(Adw.ApplicationWindow):
         self.state = None
         self.baseline = None
         self.busy = False
+        self.critical = False
+        self.access_busy = False
         self.updating = False
         self.effect_sel = 1
         self.t0 = time.monotonic()
@@ -207,6 +216,7 @@ class Window(Adw.ApplicationWindow):
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self.on_about)
         self.add_action(about_action)
+        self.connect("close-request", lambda *_: self.on_close_request())
 
         self.banner = Adw.Banner(revealed=False)
         self.banner.connect("button-clicked", self.on_enable_access)
@@ -262,7 +272,9 @@ class Window(Adw.ApplicationWindow):
         self.cbtn.connect("notify::rgba", self.on_colour)
         self.entry = Gtk.Entry(width_chars=8, max_length=7, valign=Gtk.Align.CENTER)
         self.entry.connect("activate", self.on_entry)
-        self.entry.connect("notify::has-focus", lambda e, _p: None if e.has_focus() else self.on_entry(e))
+        focus = Gtk.EventControllerFocus()
+        focus.connect("leave", lambda *_: self.on_entry(self.entry))
+        self.entry.add_controller(focus)
         self.colour_tools.append(self.cbtn)
         self.colour_tools.append(self.entry)
         crow.append(self.colour_tools)
@@ -363,7 +375,7 @@ class Window(Adw.ApplicationWindow):
             return None
         has_colour = m in lighting.COLOUR_EFFECTS
         cf = has_colour and st.colourful(m)
-        return (m, cf, tuple(st.colour(m)) if has_colour and not cf else None, st.brightness(m), st.speed(m))
+        return (m, cf, tuple(st.colour(m)) if has_colour and not cf else None, *clamped_levels(st, m))
 
     def palette(self, m):
         if not self.state:
@@ -376,7 +388,7 @@ class Window(Adw.ApplicationWindow):
         has_colour = m in lighting.COLOUR_EFFECTS
         o = lighting.OFF_COLOUR + (m - 1) * lighting.COLOUR_RECORD
         base = tuple(st.colours[o:o + 3]) if has_colour else (255, 255, 255)
-        return base, has_colour and st.colourful(m), self.palette(m), st.brightness(m), max(1, st.speed(m))
+        return base, has_colour and st.colourful(m), self.palette(m), *clamped_levels(st, m)
 
     def refresh_tiles(self):
         if not self.state:
@@ -398,8 +410,9 @@ class Window(Adw.ApplicationWindow):
         st = self.state
         has_colour = m in lighting.COLOUR_EFFECTS
         self.colourful.set_active(has_colour and st.colourful(m))
-        self.bright.set_value(st.brightness(m))
-        self.speed.set_value(max(1, st.speed(m)))
+        bright, speed = clamped_levels(st, m)
+        self.bright.set_value(bright)
+        self.speed.set_value(speed)
         o = lighting.OFF_COLOUR + (m - 1) * lighting.COLOUR_RECORD
         self.set_colour(tuple(st.colours[o:o + 3]) if has_colour else (255, 255, 255))
         self.updating = False
@@ -476,11 +489,8 @@ class Window(Adw.ApplicationWindow):
         self.refresh_all()
 
     def on_entry(self, entry):
-        t = entry.get_text().strip().lstrip("#")
         try:
-            if len(t) != 6:
-                raise ValueError
-            rgb = tuple(int(t[i:i + 2], 16) for i in (0, 2, 4))
+            rgb = lighting.parse_hex(entry.get_text())
         except ValueError:
             entry.set_text(hex_of(self.current_colour()))
             return
@@ -495,21 +505,33 @@ class Window(Adw.ApplicationWindow):
     def set_busy(self, busy, text=""):
         self.busy = busy
         self.status.set_text(text)
+        self.flow.set_sensitive(not busy)
+        restore = self.lookup_action("restore")
+        if restore:
+            restore.set_enabled(not busy)
         self.update_dirty()
 
-    def run(self, fn, done, working):
+    def on_close_request(self):
+        if self.critical:
+            self.toasts.add_toast(Adw.Toast(title="Wait for the keyboard write to finish"))
+        return self.critical
+
+    def run(self, fn, done, working, writes=False):
         if self.busy:
             return
+        self.critical = writes
         self.set_busy(True, working)
 
         def finish(res, err):
+            self.critical = False
             self.set_busy(False)
             if err:
                 self.status.set_text(str(err))
                 self.banner.set_title(str(err))
                 self.banner.set_button_label("Enable access" if isinstance(err, AccessError) else None)
                 self.banner.set_revealed(True)
-                self.wtitle.set_subtitle("Keyboard not available")
+                if isinstance(err, (AccessError, NotFoundError)):
+                    self.wtitle.set_subtitle("Keyboard not available")
             else:
                 self.banner.set_revealed(False)
                 done(res)
@@ -536,11 +558,16 @@ class Window(Adw.ApplicationWindow):
         self.run(rd, self.load_state, "Reading keyboard…")
 
     def on_enable_access(self, *_):
+        if self.access_busy:
+            return
+        self.access_busy = True
+
         def fix():
             access.install_rule()
             time.sleep(1)
 
         def done(_res, err):
+            self.access_busy = False
             if err:
                 self.toasts.add_toast(Adw.Toast(title=f"Could not enable access: {err}"))
             else:
@@ -549,12 +576,14 @@ class Window(Adw.ApplicationWindow):
 
     def on_save(self, *_):
         m, cf, colour, b, sp = self.snapshot()
-        args = dict(effect=m, speed=sp, brightness=b, colour=colour, colourful=cf)
+        stored_b, stored_sp = clamped_levels(self.state, m)
+        args = dict(effect=m, speed=None if sp == stored_sp else sp, brightness=None if b == stored_b else b,
+                    colour=colour, colourful=cf)
 
         def done(st):
             self.load_state(st)
             self.toasts.add_toast(Adw.Toast(title="Saved to keyboard"))
-        self.run(lambda: lighting.apply(**args), done, "Saving…")
+        self.run(lambda: lighting.apply(**args), done, "Saving…", writes=True)
 
     def on_about(self, *_):
         Adw.AboutDialog(
@@ -578,7 +607,7 @@ class Window(Adw.ApplicationWindow):
                 def done(st):
                     self.load_state(st)
                     self.toasts.add_toast(Adw.Toast(title="Original lighting restored"))
-                self.run(lighting.restore_first, done, "Restoring…")
+                self.run(lighting.restore_first, done, "Restoring…", writes=True)
         dlg.connect("response", answered)
         dlg.present(self)
 
@@ -600,6 +629,13 @@ class App(Adw.Application):
         cfg["theme"] = name
         save_settings(cfg)
 
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+        prov = Gtk.CssProvider()
+        prov.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
     def do_activate(self):
         if not self.lookup_action("theme"):
             saved = load_settings().get("theme", "system")
@@ -607,10 +643,6 @@ class App(Adw.Application):
             act.connect("change-state", self.set_theme)
             self.add_action(act)
             act.change_state(GLib.Variant("s", saved))
-        prov = Gtk.CssProvider()
-        prov.load_from_data(CSS)
-        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov,
-                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         (self.props.active_window or Window(self)).present()
 
 

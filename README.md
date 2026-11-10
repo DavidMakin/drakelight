@@ -72,7 +72,7 @@ The theme (follow system, light or dark) is in the app's menu.
 
 ### Recovery
 
-Before every write the previous settings are saved to `~/.config/drakelight/backups/`. **Restore original
+Before every write the previous settings are saved to `~/.config/drakelight/backups/`, and the state from before the first save is kept for good as `original-*.bin`. **Restore original
 lighting** in the app menu (or `drakelight restore`) writes the oldest backup back. The keyboard's own factory
 reset is **Fn + Esc** held for three seconds.
 

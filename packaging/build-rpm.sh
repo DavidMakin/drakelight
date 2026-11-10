@@ -11,7 +11,7 @@ find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE" -type f ! -perm -u+x -exec chmod 644 {} +
 fpm -s dir -t rpm -n drakelight -v "$VERSION" -a noarch --license MIT \
     --maintainer "$MAINTAINER" --url "$HOMEPAGE" --description "$DESCRIPTION" \
-    -d python3 -d python3-gobject -d python3-cairo -d gtk4 -d libadwaita \
+    -d python3 -d python3-gobject -d python3-cairo -d "gtk4 >= 4.10" -d "libadwaita >= 1.5" \
     --after-install "$ROOT/packaging/postinst.sh" --after-remove "$ROOT/packaging/postrm.sh" \
     -p "$ROOT/dist/drakelight-${VERSION}-1.noarch.rpm" -C "$STAGE" .
 echo "built dist/drakelight-${VERSION}-1.noarch.rpm"

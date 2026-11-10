@@ -10,7 +10,8 @@ else
 UDEVDIR ?= /etc/udev/rules.d
 endif
 
-RELEASE_DATE := $(shell date -u -d @$${SOURCE_DATE_EPOCH:-$$(date +%s)} +%F)
+RELEASE_DATE := $(shell if [ -n "$$SOURCE_DATE_EPOCH" ]; then date -u -d @$$SOURCE_DATE_EPOCH +%F; else git log -1 --format=%cs 2>/dev/null || date -u +%F; fi)
+PY := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 METAINFO := build/$(APP_ID).metainfo.xml
 
 .PHONY: install uninstall dist test clean metainfo
@@ -21,6 +22,7 @@ metainfo:
 
 install: metainfo
 	install -d $(DESTDIR)$(LIBDIR)/drakelight
+	rm -rf $(DESTDIR)$(LIBDIR)/drakelight/drakelight
 	cp -r drakelight $(DESTDIR)$(LIBDIR)/drakelight/
 	find $(DESTDIR)$(LIBDIR)/drakelight -name __pycache__ -prune -exec rm -rf {} +
 	install -d $(DESTDIR)$(PREFIX)/bin
@@ -45,7 +47,8 @@ dist:
 	git archive --format=tar.gz --prefix=drakelight-$(VERSION)/ -o dist/drakelight-$(VERSION).tar.gz HEAD
 
 test:
-	python3 -m pytest -q
+	$(PY) -m pytest -q
+	$(PY) -m ruff check .
 
 clean:
 	rm -rf build dist
