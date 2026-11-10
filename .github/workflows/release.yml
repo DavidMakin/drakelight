@@ -72,15 +72,39 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           name: packages
           path: dist
+
+      - name: Build changelog
+        run: |
+          PREV=$(git tag --sort=-version:refname | grep -vx "${GITHUB_REF_NAME}" | head -1 || true)
+          RANGE="${PREV:+${PREV}..}${GITHUB_REF_NAME}"
+          git log "${RANGE}" --pretty=format:"%s" --no-merges > /tmp/commits.txt || true
+
+          FEATURES=$(grep "^feat" /tmp/commits.txt | sed "s/^/- /" || true)
+          FIXES=$(grep "^fix" /tmp/commits.txt | sed "s/^/- /" || true)
+          MAINTENANCE=$(grep -Ev "^feat|^fix|^chore|^ci:|^build:|^style:" /tmp/commits.txt | sed "s/^/- /" || true)
+
+          {
+            [ -z "${FEATURES}" ] || printf "## 🚀 Features\n%s\n\n" "${FEATURES}"
+            [ -z "${FIXES}" ] || printf "## 🐛 Bug Fixes\n%s\n\n" "${FIXES}"
+            [ -z "${MAINTENANCE}" ] || printf "## 🧰 Maintenance\n%s\n\n" "${MAINTENANCE}"
+            printf "## 📦 Downloads\nSee the README for install instructions. Verify downloads with \`SHA256SUMS\`.\n"
+          } > notes.md
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes
+          if gh release view "${GITHUB_REF_NAME}" &>/dev/null; then
+            gh release edit "${GITHUB_REF_NAME}" --draft=false --notes-file notes.md
+            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --notes-file notes.md
+          fi

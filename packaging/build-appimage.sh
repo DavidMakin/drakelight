@@ -23,7 +23,7 @@ fetch appimagetool-x86_64.AppImage "$APPIMAGETOOL_URL"
 
 make install DESTDIR="$APPDIR" PREFIX=/usr
 rm -f "$APPDIR/usr/bin/drakelight"
-install -m755 packaging/AppRun "$APPDIR/AppRun"
+install -m755 packaging/AppRun "$BUILD/AppRun"
 
 PYV="$(/usr/bin/python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 install -Dm755 "$(readlink -f /usr/bin/python$PYV)" "$APPDIR/usr/bin/python3"
@@ -38,7 +38,7 @@ done
 GIR="$(dirname "$(find /usr/lib -type d -name girepository-1.0 | head -1)")"
 cp -r "$GIR/girepository-1.0" "$APPDIR/usr/lib/"
 
-ARGS=(--appdir "$APPDIR" --plugin gtk --custom-apprun "$APPDIR/AppRun"
+ARGS=(--appdir "$APPDIR" --plugin gtk --custom-apprun "$BUILD/AppRun"
       --desktop-file "data/$APP_ID.desktop" --icon-file "data/$APP_ID.svg"
       --executable "$APPDIR/usr/bin/python3")
 for lib in libgtk-4.so.1 libadwaita-1.so.0; do
