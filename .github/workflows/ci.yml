@@ -18,10 +18,12 @@ jobs:
           python-version: "3.14"
       - name: Install tooling
         run: |
-          pip install pytest ruff==0.17.4
+          pip install pytest ruff==0.17.4 mypy
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream fakeroot
       - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
       - run: pytest -q
       - name: Validate desktop entry and appstream data
         run: |
