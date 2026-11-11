@@ -1,0 +1,33 @@
+[project]
+name = "my-project"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.4",
+    "mypy>=1.13",
+    "pytest>=8.0",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Set to the package directory. Use "src/my_project" for a src layout.
+[tool.hatch.build.targets.wheel]
+packages = ["my_project"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["my_project"]
