@@ -49,6 +49,8 @@ dist:
 test:
 	$(PY) -m pytest -q
 	$(PY) -m ruff check .
+	$(PY) -m ruff format --check .
+	$(PY) -m mypy
 
 clean:
 	rm -rf build dist

@@ -21,7 +21,8 @@ dependencies beyond the distro's PyGObject.
 
 ## Commands
 
-- Test and lint: `.venv/bin/pytest -q && .venv/bin/ruff check .` (or `make test`).
+- Test and lint: `uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run mypy` (or `make test`).
+- Wait for CI with `gh pr checks <n> --watch` or `gh run watch`, not sleep loops.
 - Run the GUI from a checkout: `PYTHONPATH=. /usr/bin/python3 -m drakelight`. The GTK bindings only exist for the
   system Python, not asdf or venv interpreters.
 - Packages: `make dist`, `bash packaging/build-deb.sh`, `build-rpm.sh`, `build-appimage.sh` (outputs in `dist/`).
@@ -30,7 +31,11 @@ dependencies beyond the distro's PyGObject.
 
 - Commit subjects use conventional prefixes (`feat:`, `fix:`, `docs:`, `ci:`, `build:`, `chore:`). The release
   workflow groups notes by them.
-- Releasing: bump `__version__` in `drakelight/__init__.py` (the only place the version lives; the CLI, About dialog,
+- Python version lives in `pyproject.toml` (`requires-python`, ruff `target-version`, mypy `python_version`), `.python-version`,
+  `packaging/build-deb.sh` (Depends), and `.github/workflows/ci.yml` and `release.yml` (`runs-on`). The packages bundle the
+  runner's system Python and its `gi` bindings, so a version bump must move all of them together, and the packages job
+  needs a runner that ships that Python.
+- Releasing (`scripts/release.sh X.Y.Z` does the bump, gates and commit): bump `__version__` in `drakelight/__init__.py` (the only place the version lives; the CLI, About dialog,
   packages and metainfo all read it), commit, then `git tag -a vX.Y.Z -m "..." && git push --tags`. The workflow fails if the tag and `__version__` differ.
 - Keep the two UI themes (light and dark) working; check both when changing styling.
 - No AI attribution in commits or PRs.
