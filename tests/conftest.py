@@ -14,4 +14,5 @@ from drakelight import hidraw  # noqa: E402
 def no_real_keyboard(monkeypatch):
     def refuse(*_a, **_k):
         raise AssertionError("tests must use a fake keyboard, never a real device")
+
     monkeypatch.setattr(hidraw.Keyboard, "__init__", refuse)

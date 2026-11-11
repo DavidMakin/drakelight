@@ -1,10 +1,13 @@
 """GTK 4 / libadwaita GUI: an effect gallery with live animated tiles and a control bar."""
+
 import json
 import math
 import os
 import sys
 import threading
 import time
+from collections.abc import Callable, Sequence
+from typing import Any, cast
 
 import gi
 
@@ -19,7 +22,7 @@ APP_ID = "io.github.davidmakin.Drakelight"
 SETTINGS = os.path.join(lighting.CONFIG_DIR, "settings.json")
 
 # 65% layout, row by row, key widths in units (16u wide).
-LAYOUT = [
+LAYOUT: Sequence[Sequence[float]] = [
     [1] * 13 + [2, 1],
     [1.5] + [1] * 12 + [1.5, 1],
     [1.75] + [1] * 11 + [2.25, 1],
@@ -27,11 +30,22 @@ LAYOUT = [
     [1.25, 1.25, 1.25, 6.25, 1, 1, 1, 1, 1, 1],
 ]
 
-SWATCHES = [(255, 0, 0), (255, 128, 0), (255, 255, 0), (0, 255, 0),
-            (0, 255, 255), (0, 80, 255), (170, 0, 255), (255, 0, 200), (255, 255, 255)]
+SWATCHES = [
+    (255, 0, 0),
+    (255, 128, 0),
+    (255, 255, 0),
+    (0, 255, 0),
+    (0, 255, 255),
+    (0, 80, 255),
+    (170, 0, 255),
+    (255, 0, 200),
+    (255, 255, 255),
+]
 BRIGHT_LABELS = ["Off", "25%", "50%", "75%", "100%"]
 SPEED_LABELS = {1: "Slow", 2: "Medium", 3: "Fast", 4: "Fastest"}
 NO_SPEED = {1}
+
+Snapshot = tuple[int, bool, tuple[int, ...] | None, int, int]
 
 CSS = b"""
 flowboxchild { border-radius: 14px; padding: 6px; }
@@ -47,15 +61,15 @@ flowboxchild:selected {
 """
 
 
-def load_settings():
+def load_settings() -> dict[str, Any]:
     try:
         with open(SETTINGS) as f:
-            return json.load(f)
-    except (OSError, ValueError):
+            return cast(dict[str, Any], json.load(f))
+    except OSError, ValueError:
         return {}
 
 
-def save_settings(d):
+def save_settings(d: dict[str, Any]) -> None:
     try:
         os.makedirs(lighting.CONFIG_DIR, exist_ok=True)
         with open(SETTINGS, "w") as f:
@@ -64,11 +78,13 @@ def save_settings(d):
         pass
 
 
-def hex_of(rgb):
+def hex_of(rgb: Sequence[int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
-def draw_board(cr, w, h, effect, look, brightness, speed, t0):
+def draw_board(
+    cr: Any, w: float, h: float, effect: int, look: preview_fx.Look, brightness: int, speed: int, t0: float
+) -> None:
     pad = 6
     units = 16
     unit = min((w - 2 * pad) / units, (h - 2 * pad) / 5)
@@ -86,12 +102,10 @@ def draw_board(cr, w, h, effect, look, brightness, speed, t0):
         x = 0.0
         for c, wd in enumerate(row):
             if brightness == 0:
-                rgb = off
+                rgb: tuple[float, ...] = off
             else:
-                lit = preview_fx.key_colour(effect, look, (x + wd / 2) / units, (r + 0.5) / 5,
-                                            idx, r, c, t, len(row))
-                rgb = tuple(off[i] * (1 - level * 0.6) + min(1.0, max(0.0, lit[i])) * level * 0.95
-                            for i in range(3))
+                lit = preview_fx.key_colour(effect, look, (x + wd / 2) / units, (r + 0.5) / 5, idx, r, c, t, len(row))
+                rgb = tuple(off[i] * (1 - level * 0.6) + min(1.0, max(0.0, lit[i])) * level * 0.95 for i in range(3))
             cr.set_source_rgb(*rgb)
             cr.rectangle(ox + x * unit, oy + r * unit, wd * unit - gap, unit - gap)
             cr.fill()
@@ -99,8 +113,8 @@ def draw_board(cr, w, h, effect, look, brightness, speed, t0):
             idx += 1
 
 
-class Tile(Gtk.Box):
-    def __init__(self, m, t0):
+class Tile(Gtk.Box):  # type: ignore[misc]
+    def __init__(self, m: int, t0: float) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.m = m
         self.t0 = t0
@@ -117,21 +131,28 @@ class Tile(Gtk.Box):
         self.append(self.area)
         self.append(name)
 
-    def set_look(self, base, colourful, palette, brightness, speed):
+    def set_look(
+        self, base: Sequence[int], colourful: bool, palette: Sequence[Sequence[int]], brightness: int, speed: int
+    ) -> None:
         self.look = preview_fx.Look(base, colourful, palette)
         self.brightness, self.speed = brightness, speed
         self.area.queue_draw()
 
     @property
-    def animated(self):
+    def animated(self) -> bool:
         return self.brightness > 0 and not (self.effect == 1 and not self.look.colourful)
 
-    def draw(self, _a, cr, w, h):
+    def draw(self, _a: Any, cr: Any, w: int, h: int) -> None:
         draw_board(cr, w, h, self.effect, self.look, self.brightness, self.speed, self.t0)
 
 
-class Swatch(Gtk.DrawingArea):
-    def __init__(self, rgb, on_pick, is_active):
+class Swatch(Gtk.DrawingArea):  # type: ignore[misc]
+    def __init__(
+        self,
+        rgb: tuple[int, ...],
+        on_pick: Callable[[tuple[int, ...]], None],
+        is_active: Callable[[Sequence[int]], bool],
+    ) -> None:
         super().__init__(content_width=28, content_height=28, valign=Gtk.Align.CENTER)
         self.rgb = rgb
         self.is_active = is_active
@@ -142,7 +163,7 @@ class Swatch(Gtk.DrawingArea):
         self.add_controller(click)
         self.set_tooltip_text(hex_of(rgb))
 
-    def draw(self, _a, cr, w, h):
+    def draw(self, _a: Any, cr: Any, w: int, h: int) -> None:
         cx, cy, r = w / 2, h / 2, min(w, h) / 2 - 3
         cr.arc(cx, cy, r, 0, 2 * math.pi)
         cr.set_source_rgb(*(c / 255 for c in self.rgb))
@@ -158,13 +179,13 @@ class Swatch(Gtk.DrawingArea):
             cr.stroke()
 
 
-def clamped_levels(st, m):
+def clamped_levels(st: lighting.State, m: int) -> tuple[int, int]:
     """Brightness and speed as the sliders can show them (0-4 and 1-4)."""
-    return min(4, st.brightness(m)), min(4, max(1, st.speed(m)))
+    return min(4, cast(int, st.brightness(m))), min(4, max(1, cast(int, st.speed(m))))
 
 
-def run_async(fn, done):
-    def worker():
+def run_async(fn: Callable[[], Any], done: Callable[[Any, Exception | None], Any]) -> None:
+    def worker() -> None:
         try:
             res, err = fn(), None
         except (DeviceError, RuntimeError) as e:
@@ -174,14 +195,15 @@ def run_async(fn, done):
         except Exception as e:
             res, err = None, DeviceError(f"unexpected error: {e}")
         GLib.idle_add(done, res, err)
+
     threading.Thread(target=worker, daemon=True).start()
 
 
-class Window(Adw.ApplicationWindow):
-    def __init__(self, app):
+class Window(Adw.ApplicationWindow):  # type: ignore[misc]
+    def __init__(self, app: Any) -> None:
         super().__init__(application=app, title="Redragon K631", default_width=960, default_height=800)
-        self.state = None
-        self.baseline = None
+        self.state: lighting.State | None = None
+        self.baseline: Snapshot | None = None
         self.busy = False
         self.critical = False
         self.access_busy = False
@@ -208,8 +230,9 @@ class Window(Adw.ApplicationWindow):
         about = Gio.Menu()
         about.append("About Drakelight", "win.about")
         menu.append_section(None, about)
-        header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu,
-                                       tooltip_text="Appearance and recovery"))
+        header.pack_end(
+            Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Appearance and recovery")
+        )
         restore = Gio.SimpleAction.new("restore", None)
         restore.connect("activate", self.on_restore)
         self.add_action(restore)
@@ -230,9 +253,15 @@ class Window(Adw.ApplicationWindow):
         GLib.timeout_add(80, self.tick)
         self.reload()
 
-    def build(self):
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
-                       margin_top=16, margin_bottom=20, margin_start=20, margin_end=20)
+    def build(self) -> Gtk.Box:
+        page = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=16,
+            margin_top=16,
+            margin_bottom=20,
+            margin_start=20,
+            margin_end=20,
+        )
 
         heading = Gtk.Label(label="Effects", xalign=0)
         heading.add_css_class("title-3")
@@ -243,11 +272,17 @@ class Window(Adw.ApplicationWindow):
         head.append(sub)
         page.append(head)
 
-        self.flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True,
-                                min_children_per_line=2, max_children_per_line=5,
-                                row_spacing=4, column_spacing=4, activate_on_single_click=True,
-                                valign=Gtk.Align.START)
-        self.tiles = []
+        self.flow = Gtk.FlowBox(
+            selection_mode=Gtk.SelectionMode.SINGLE,
+            homogeneous=True,
+            min_children_per_line=2,
+            max_children_per_line=5,
+            row_spacing=4,
+            column_spacing=4,
+            activate_on_single_click=True,
+            valign=Gtk.Align.START,
+        )
+        self.tiles: list[Tile] = []
         for m in lighting.EFFECTS:
             tile = Tile(m, self.t0)
             self.flow.append(tile)
@@ -267,8 +302,9 @@ class Window(Adw.ApplicationWindow):
         self.colour_tools = Gtk.Box(spacing=8)
         for rgb in SWATCHES:
             self.colour_tools.append(Swatch(rgb, self.on_swatch, self.swatch_active))
-        self.cbtn = Gtk.ColorDialogButton(dialog=Gtk.ColorDialog(with_alpha=False), valign=Gtk.Align.CENTER,
-                                          tooltip_text="Custom colour")
+        self.cbtn = Gtk.ColorDialogButton(
+            dialog=Gtk.ColorDialog(with_alpha=False), valign=Gtk.Align.CENTER, tooltip_text="Custom colour"
+        )
         self.cbtn.connect("notify::rgba", self.on_colour)
         self.entry = Gtk.Entry(width_chars=8, max_length=7, valign=Gtk.Align.CENTER)
         self.entry.connect("activate", self.on_entry)
@@ -278,8 +314,9 @@ class Window(Adw.ApplicationWindow):
         self.colour_tools.append(self.cbtn)
         self.colour_tools.append(self.entry)
         crow.append(self.colour_tools)
-        self.colourful = Gtk.ToggleButton(label="Onboard colours", valign=Gtk.Align.CENTER,
-                                          tooltip_text="Cycle through the keyboard's own colours")
+        self.colourful = Gtk.ToggleButton(
+            label="Onboard colours", valign=Gtk.Align.CENTER, tooltip_text="Cycle through the keyboard's own colours"
+        )
         self.colourful.connect("toggled", self.on_colourful)
         crow.append(self.colourful)
         self.colour_hint = Gtk.Label(label="", xalign=0, hexpand=True)
@@ -313,7 +350,7 @@ class Window(Adw.ApplicationWindow):
         page.append(self.status)
         return page
 
-    def scale_field(self, title, lo, hi, labels):
+    def scale_field(self, title: str, lo: int, hi: int, labels: list[str]) -> tuple[Any, Any, Any]:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         top = Gtk.Box()
         name = Gtk.Label(label=title, xalign=0, hexpand=True)
@@ -324,73 +361,86 @@ class Window(Adw.ApplicationWindow):
         top.append(val)
         scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, lo, hi, 1)
         scale.set_draw_value(False)
-        for i, label in zip(range(lo, hi + 1), labels):
+        for i, label in zip(range(lo, hi + 1), labels, strict=True):
             scale.add_mark(i, Gtk.PositionType.BOTTOM, label or None)
         scale.connect("value-changed", self.on_change)
         box.append(top)
         box.append(scale)
         return box, scale, val
 
-    def tick(self):
+    def tick(self) -> bool:
         if self.is_active():
             for tile in self.tiles:
                 if tile.animated:
                     tile.area.queue_draw()
         return True
 
-    def selected_effect(self):
+    def selected_effect(self) -> int:
         return self.effect_sel
 
-    def select_effect(self, m):
+    def select_effect(self, m: int) -> None:
         self.updating = True
         self.effect_sel = m
         self.flow.select_child(self.tiles[m - 1].get_parent())
         self.updating = False
 
-    def current_colour(self):
+    def current_colour(self) -> tuple[int, int, int]:
         c = self.cbtn.get_rgba()
         return (round(c.red * 255), round(c.green * 255), round(c.blue * 255))
 
-    def set_colour(self, rgb):
+    def set_colour(self, rgb: Sequence[int]) -> None:
         c = Gdk.RGBA()
         c.red, c.green, c.blue, c.alpha = rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, 1
         self.cbtn.set_rgba(c)
         self.entry.set_text(hex_of(rgb))
 
-    def swatch_active(self, rgb):
-        return (self.selected_effect() in lighting.COLOUR_EFFECTS and not self.colourful.get_active()
-                and tuple(rgb) == self.current_colour())
+    def swatch_active(self, rgb: Sequence[int]) -> bool:
+        return (
+            self.selected_effect() in lighting.COLOUR_EFFECTS
+            and not self.colourful.get_active()
+            and tuple(rgb) == self.current_colour()
+        )
 
-    def snapshot(self):
+    def snapshot(self) -> Snapshot:
         m = self.selected_effect()
         has_colour = m in lighting.COLOUR_EFFECTS
         cf = has_colour and self.colourful.get_active()
-        return (m, cf, self.current_colour() if has_colour and not cf else None,
-                int(self.bright.get_value()), int(self.speed.get_value()))
+        return (
+            m,
+            cf,
+            self.current_colour() if has_colour and not cf else None,
+            int(self.bright.get_value()),
+            int(self.speed.get_value()),
+        )
 
     @staticmethod
-    def state_snapshot(st):
+    def state_snapshot(st: lighting.State) -> Snapshot | None:
         m = st.effect
         if m not in lighting.EFFECTS:
             return None
         has_colour = m in lighting.COLOUR_EFFECTS
         cf = has_colour and st.colourful(m)
-        return (m, cf, tuple(st.colour(m)) if has_colour and not cf else None, *clamped_levels(st, m))
+        return (
+            m,
+            cf,
+            tuple(cast(tuple[int, ...], st.colour(m))) if has_colour and not cf else None,
+            *clamped_levels(st, m),
+        )
 
-    def palette(self, m):
+    def palette(self, m: int) -> list[tuple[int, ...]]:
         if not self.state:
             return []
         o = lighting.OFF_COLOUR + (m - 1) * lighting.COLOUR_RECORD
-        return [tuple(self.state.colours[o + 3 * i:o + 3 * i + 3]) for i in range(7)]
+        return [tuple(self.state.colours[o + 3 * i : o + 3 * i + 3]) for i in range(7)]
 
-    def stored_look(self, m):
-        st = self.state
+    def stored_look(self, m: int) -> tuple[tuple[int, ...], bool, list[tuple[int, ...]], int, int]:
+        st = cast(lighting.State, self.state)
         has_colour = m in lighting.COLOUR_EFFECTS
         o = lighting.OFF_COLOUR + (m - 1) * lighting.COLOUR_RECORD
-        base = tuple(st.colours[o:o + 3]) if has_colour else (255, 255, 255)
+        base = tuple(st.colours[o : o + 3]) if has_colour else (255, 255, 255)
         return base, has_colour and st.colourful(m), self.palette(m), *clamped_levels(st, m)
 
-    def refresh_tiles(self):
+    def refresh_tiles(self) -> None:
         if not self.state:
             return
         for tile in self.tiles:
@@ -398,32 +448,36 @@ class Window(Adw.ApplicationWindow):
                 tile.set_look(*self.stored_look(tile.m))
         self.refresh_selected_tile()
 
-    def refresh_selected_tile(self):
+    def refresh_selected_tile(self) -> None:
         m = self.selected_effect()
         has_colour = m in lighting.COLOUR_EFFECTS
-        self.tiles[m - 1].set_look(self.current_colour() if has_colour else (255, 255, 255),
-                                   has_colour and self.colourful.get_active(), self.palette(m),
-                                   int(self.bright.get_value()), int(self.speed.get_value()))
+        self.tiles[m - 1].set_look(
+            self.current_colour() if has_colour else (255, 255, 255),
+            has_colour and self.colourful.get_active(),
+            self.palette(m),
+            int(self.bright.get_value()),
+            int(self.speed.get_value()),
+        )
 
-    def populate(self, m):
+    def populate(self, m: int) -> None:
         self.updating = True
-        st = self.state
+        st = cast(lighting.State, self.state)
         has_colour = m in lighting.COLOUR_EFFECTS
         self.colourful.set_active(has_colour and st.colourful(m))
         bright, speed = clamped_levels(st, m)
         self.bright.set_value(bright)
         self.speed.set_value(speed)
         o = lighting.OFF_COLOUR + (m - 1) * lighting.COLOUR_RECORD
-        self.set_colour(tuple(st.colours[o:o + 3]) if has_colour else (255, 255, 255))
+        self.set_colour(tuple(st.colours[o : o + 3]) if has_colour else (255, 255, 255))
         self.updating = False
         self.refresh_all()
 
-    def refresh_all(self):
+    def refresh_all(self) -> None:
         self.update_rows()
         self.refresh_tiles()
         self.update_dirty()
 
-    def update_rows(self):
+    def update_rows(self) -> None:
         m = self.selected_effect()
         has_colour = m in lighting.COLOUR_EFFECTS
         cf = self.colourful.get_active()
@@ -447,7 +501,7 @@ class Window(Adw.ApplicationWindow):
                 child.queue_draw()
             child = child.get_next_sibling()
 
-    def update_dirty(self):
+    def update_dirty(self) -> None:
         dirty = self.state is not None and not self.busy and self.snapshot() != self.baseline
         self.save_btn.set_sensitive(dirty)
         self.reload_btn.set_sensitive(dirty)
@@ -456,7 +510,7 @@ class Window(Adw.ApplicationWindow):
         else:
             self.dirty_label.set_text("Unsaved changes" if dirty else "Everything is saved on the keyboard")
 
-    def on_tile(self, flow):
+    def on_tile(self, flow: Any) -> None:
         if self.updating or not self.state:
             return
         sel = flow.get_selected_children()
@@ -466,7 +520,7 @@ class Window(Adw.ApplicationWindow):
                 self.effect_sel = m
                 self.populate(m)
 
-    def on_swatch(self, rgb):
+    def on_swatch(self, rgb: tuple[int, ...]) -> None:
         if not self.state or self.selected_effect() not in lighting.COLOUR_EFFECTS:
             return
         self.updating = True
@@ -475,11 +529,11 @@ class Window(Adw.ApplicationWindow):
         self.updating = False
         self.refresh_all()
 
-    def on_colourful(self, *_):
+    def on_colourful(self, *_: Any) -> None:
         if not self.updating:
             self.refresh_all()
 
-    def on_colour(self, *_):
+    def on_colour(self, *_: Any) -> None:
         if self.updating:
             return
         self.entry.set_text(hex_of(self.current_colour()))
@@ -488,7 +542,7 @@ class Window(Adw.ApplicationWindow):
         self.updating = False
         self.refresh_all()
 
-    def on_entry(self, entry):
+    def on_entry(self, entry: Any) -> None:
         try:
             rgb = lighting.parse_hex(entry.get_text())
         except ValueError:
@@ -498,11 +552,11 @@ class Window(Adw.ApplicationWindow):
             return
         self.on_swatch(rgb)
 
-    def on_change(self, *_):
+    def on_change(self, *_: Any) -> None:
         if not self.updating:
             self.refresh_all()
 
-    def set_busy(self, busy, text=""):
+    def set_busy(self, busy: bool, text: str = "") -> None:
         self.busy = busy
         self.status.set_text(text)
         self.flow.set_sensitive(not busy)
@@ -511,18 +565,18 @@ class Window(Adw.ApplicationWindow):
             restore.set_enabled(not busy)
         self.update_dirty()
 
-    def on_close_request(self):
+    def on_close_request(self) -> bool:
         if self.critical:
             self.toasts.add_toast(Adw.Toast(title="Wait for the keyboard write to finish"))
         return self.critical
 
-    def run(self, fn, done, working, writes=False):
+    def run(self, fn: Callable[[], Any], done: Callable[[Any], Any], working: str, writes: bool = False) -> None:
         if self.busy:
             return
         self.critical = writes
         self.set_busy(True, working)
 
-        def finish(res, err):
+        def finish(res: Any, err: Exception | None) -> None:
             self.critical = False
             self.set_busy(False)
             if err:
@@ -535,9 +589,10 @@ class Window(Adw.ApplicationWindow):
             else:
                 self.banner.set_revealed(False)
                 done(res)
+
         run_async(fn, finish)
 
-    def load_state(self, st):
+    def load_state(self, st: lighting.State) -> None:
         self.state = st
         self.baseline = self.state_snapshot(st)
         try:
@@ -551,75 +606,94 @@ class Window(Adw.ApplicationWindow):
         if st.effect not in lighting.EFFECTS:
             self.status.set_text("Keyboard is in per-key mode; saving an effect leaves it.")
 
-    def reload(self):
-        def rd():
+    def reload(self) -> None:
+        def rd() -> lighting.State:
             with Keyboard() as kb:
                 return lighting.read_state(kb)
+
         self.run(rd, self.load_state, "Reading keyboard…")
 
-    def on_enable_access(self, *_):
+    def on_enable_access(self, *_: Any) -> None:
         if self.access_busy:
             return
         self.access_busy = True
 
-        def fix():
+        def fix() -> None:
             access.install_rule()
             time.sleep(1)
 
-        def done(_res, err):
+        def done(_res: Any, err: Exception | None) -> None:
             self.access_busy = False
             if err:
                 self.toasts.add_toast(Adw.Toast(title=f"Could not enable access: {err}"))
             else:
                 self.reload()
+
         run_async(fix, done)
 
-    def on_save(self, *_):
+    def on_save(self, *_: Any) -> None:
         m, cf, colour, b, sp = self.snapshot()
-        stored_b, stored_sp = clamped_levels(self.state, m)
-        args = dict(effect=m, speed=None if sp == stored_sp else sp, brightness=None if b == stored_b else b,
-                    colour=colour, colourful=cf)
+        stored_b, stored_sp = clamped_levels(cast(lighting.State, self.state), m)
+        args: dict[str, Any] = dict(
+            effect=m,
+            speed=None if sp == stored_sp else sp,
+            brightness=None if b == stored_b else b,
+            colour=colour,
+            colourful=cf,
+        )
 
-        def done(st):
+        def done(st: lighting.State) -> None:
             self.load_state(st)
             self.toasts.add_toast(Adw.Toast(title="Saved to keyboard"))
+
         self.run(lambda: lighting.apply(**args), done, "Saving…", writes=True)
 
-    def on_about(self, *_):
+    def on_about(self, *_: Any) -> None:
         Adw.AboutDialog(
-            application_name="Drakelight", application_icon=APP_ID, version=__version__,
-            developer_name="David Makin", website="https://github.com/DavidMakin/drakelight",
-            issue_url="https://github.com/DavidMakin/drakelight/issues", license_type=Gtk.License.MIT_X11,
+            application_name="Drakelight",
+            application_icon=APP_ID,
+            version=__version__,
+            developer_name="David Makin",
+            website="https://github.com/DavidMakin/drakelight",
+            issue_url="https://github.com/DavidMakin/drakelight/issues",
+            license_type=Gtk.License.MIT_X11,
             comments="Keyboard lighting control for the Redragon K631. Unofficial and not affiliated with Redragon.",
         ).present(self)
 
-    def on_restore(self, *_):
+    def on_restore(self, *_: Any) -> None:
         dlg = Adw.AlertDialog(
             heading="Restore original lighting?",
             body="This writes back the lighting settings backed up before this app first saved. "
-                 "For a full factory reset, hold Fn + Esc for 3 seconds on the keyboard itself.")
+            "For a full factory reset, hold Fn + Esc for 3 seconds on the keyboard itself.",
+        )
         dlg.add_response("cancel", "Cancel")
         dlg.add_response("restore", "Restore")
         dlg.set_response_appearance("restore", Adw.ResponseAppearance.DESTRUCTIVE)
 
-        def answered(d, resp):
+        def answered(d: Any, resp: str) -> None:
             if resp == "restore":
-                def done(st):
+
+                def done(st: lighting.State) -> None:
                     self.load_state(st)
                     self.toasts.add_toast(Adw.Toast(title="Original lighting restored"))
+
                 self.run(lighting.restore_first, done, "Restoring…", writes=True)
+
         dlg.connect("response", answered)
         dlg.present(self)
 
 
-class App(Adw.Application):
-    def __init__(self):
+class App(Adw.Application):  # type: ignore[misc]
+    def __init__(self) -> None:
         super().__init__(application_id=APP_ID)
 
-    SCHEMES = {"system": Adw.ColorScheme.DEFAULT, "light": Adw.ColorScheme.FORCE_LIGHT,
-               "dark": Adw.ColorScheme.FORCE_DARK}
+    SCHEMES = {
+        "system": Adw.ColorScheme.DEFAULT,
+        "light": Adw.ColorScheme.FORCE_LIGHT,
+        "dark": Adw.ColorScheme.FORCE_DARK,
+    }
 
-    def set_theme(self, action, value):
+    def set_theme(self, action: Any, value: Any) -> None:
         name = value.get_string()
         if name not in self.SCHEMES:
             name = "system"
@@ -629,14 +703,15 @@ class App(Adw.Application):
         cfg["theme"] = name
         save_settings(cfg)
 
-    def do_startup(self):
+    def do_startup(self) -> None:
         Adw.Application.do_startup(self)
         prov = Gtk.CssProvider()
         prov.load_from_data(CSS)
-        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), prov,
-                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
-    def do_activate(self):
+    def do_activate(self) -> None:
         if not self.lookup_action("theme"):
             saved = load_settings().get("theme", "system")
             act = Gio.SimpleAction.new_stateful("theme", GLib.VariantType.new("s"), GLib.Variant("s", "system"))
@@ -646,5 +721,5 @@ class App(Adw.Application):
         (self.props.active_window or Window(self)).present()
 
 
-def run():
-    return App().run(sys.argv[:1])
+def run() -> int:
+    return cast(int, App().run(sys.argv[:1]))
