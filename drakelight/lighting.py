@@ -4,20 +4,24 @@ Layout verified against the official app's captured traffic (via
 ahmad-bradii/Redragon_K631RGB-PRO_Setup) and a live read of this keyboard.
 Every write is preceded by a backup and limited to a handful of changed bytes.
 """
+
 import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any, cast
 
 from .hidraw import DeviceError, Keyboard
 
-CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
-                          "drakelight")
+CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "drakelight")
 BACKUP_DIR = os.path.join(CONFIG_DIR, "backups")
 
+Buf = bytes | bytearray
 
-def _migrate_config_dir():
+
+def _migrate_config_dir() -> None:
     """Pre-release builds stored backups under ~/.config/redragon-k631; keep them."""
     old = os.path.join(os.path.dirname(CONFIG_DIR), "redragon-k631")
     if os.path.isdir(old) and not os.path.exists(CONFIG_DIR):
@@ -32,10 +36,10 @@ _migrate_config_dir()
 BLOCK = 1032
 OFF_SELF_DEFINE = 0x14
 OFF_EFFECT = 0x15
-OFF_PAIR = 0x26          # effect m: [OFF_PAIR + 2(m-1)] colour mode, [+1] speed<<4 | brightness
-OFF_COLOUR = 0x1D        # effect m: 7 RGB slots at OFF_COLOUR + 21(m-1); slot 0 = single colour
+OFF_PAIR = 0x26  # effect m: [OFF_PAIR + 2(m-1)] colour mode, [+1] speed<<4 | brightness
+OFF_COLOUR = 0x1D  # effect m: 7 RGB slots at OFF_COLOUR + 21(m-1); slot 0 = single colour
 COLOUR_RECORD = 21
-EFFECTS = range(1, 21)   # 21 is per-key "self-define", not supported here
+EFFECTS = range(1, 21)  # 21 is per-key "self-define", not supported here
 COLOUR_EFFECTS = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20}
 COLOURFUL = 0x07
 MAX_CHANGED = 3
@@ -43,19 +47,34 @@ WRITE_GAP = 0.06
 
 
 NAMES = {
-    1: "Fixed on", 2: "Respire", 3: "Rainbow", 4: "Flash away", 5: "Raindrops",
-    6: "Rainbow wheel", 7: "Ripples shining", 8: "Stars twinkle", 9: "Shadow disappear",
-    10: "Retro snake", 11: "Neon stream", 12: "Reaction", 13: "Sine wave",
-    14: "Retinue scanning", 15: "Rotating windmill", 16: "Colorful waterfall",
-    17: "Blossoming", 18: "Rotating storm", 19: "Collision", 20: "Perfect",
+    1: "Fixed on",
+    2: "Respire",
+    3: "Rainbow",
+    4: "Flash away",
+    5: "Raindrops",
+    6: "Rainbow wheel",
+    7: "Ripples shining",
+    8: "Stars twinkle",
+    9: "Shadow disappear",
+    10: "Retro snake",
+    11: "Neon stream",
+    12: "Reaction",
+    13: "Sine wave",
+    14: "Retinue scanning",
+    15: "Rotating windmill",
+    16: "Colorful waterfall",
+    17: "Blossoming",
+    18: "Rotating storm",
+    19: "Collision",
+    20: "Perfect",
 }
 
 
-def effect_name(m):
+def effect_name(m: int) -> str:
     return NAMES.get(m, f"Effect {m}")
 
 
-def validate(cfg):
+def validate(cfg: Buf) -> None:
     if len(cfg) != BLOCK or cfg[1] != 0x83 or cfg[2] != 0xC6:
         raise DeviceError(f"unexpected block header {bytes(cfg[:3]).hex(' ')}; refusing to write")
     if cfg[0x0E:0x10] != b"\x5a\xa5" or cfg[0x4E:0x50] != b"\x5a\xa5":
@@ -64,7 +83,7 @@ def validate(cfg):
         raise DeviceError(f"unexpected effect byte {cfg[OFF_EFFECT]:#x}; refusing to write")
 
 
-def validate_colours(col):
+def validate_colours(col: Buf) -> None:
     if len(col) != BLOCK or col[1] != 0x88:
         raise DeviceError("colour block looks wrong; refusing to write")
     if all(b == 0 for b in col[8:]):
@@ -72,53 +91,59 @@ def validate_colours(col):
 
 
 class State:
-    def __init__(self, config, colours):
+    def __init__(self, config: Buf, colours: Buf) -> None:
         self.config = bytearray(config)
         self.colours = bytearray(colours)
 
     @property
-    def effect(self):
+    def effect(self) -> int:
         return self.config[OFF_EFFECT]
 
-    def _pair(self, m):
+    def _pair(self, m: int) -> int:
         return OFF_PAIR + 2 * (m - 1)
 
-    def speed(self, m=None):
+    def speed(self, m: int | None = None) -> int | None:
         m = m or self.effect
         return self.config[self._pair(m) + 1] >> 4 if m in EFFECTS else None
 
-    def brightness(self, m=None):
+    def brightness(self, m: int | None = None) -> int | None:
         m = m or self.effect
         return self.config[self._pair(m) + 1] & 0x0F if m in EFFECTS else None
 
-    def colourful(self, m=None):
+    def colourful(self, m: int | None = None) -> bool:
         m = m or self.effect
         return m in EFFECTS and self.config[self._pair(m)] == COLOURFUL
 
-    def colour(self, m=None):
+    def colour(self, m: int | None = None) -> tuple[int, ...] | None:
         m = m or self.effect
         if m not in COLOUR_EFFECTS or self.colourful(m):
             return None
         o = OFF_COLOUR + (m - 1) * COLOUR_RECORD
-        return tuple(self.colours[o:o + 3])
+        return tuple(self.colours[o : o + 3])
 
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
         m = self.effect
-        return {"effect": m, "name": effect_name(m), "speed": self.speed(),
-                "brightness": self.brightness(), "colourful": self.colourful(),
-                "colour": self.colour(), "has_colour": m in COLOUR_EFFECTS}
+        return {
+            "effect": m,
+            "name": effect_name(m),
+            "speed": self.speed(),
+            "brightness": self.brightness(),
+            "colourful": self.colourful(),
+            "colour": self.colour(),
+            "has_colour": m in COLOUR_EFFECTS,
+        }
 
 
-def backup_pair(st):
+def backup_pair(st: State) -> None:
     """Write the current blocks as one timestamped pair (UTC, so ordering survives clock and DST changes)."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     for name, data in (("config", st.config), ("colours", st.colours)):
         with open(os.path.join(BACKUP_DIR, f"{stamp}-{name}.bin"), "xb") as f:
             f.write(data)
 
 
-def _legacy_oldest():
+def _legacy_oldest() -> tuple[str, str] | None:
     try:
         files = sorted(os.listdir(BACKUP_DIR))
     except OSError:
@@ -130,12 +155,13 @@ def _legacy_oldest():
     return os.path.join(BACKUP_DIR, cfg[0]), os.path.join(BACKUP_DIR, col[0])
 
 
-def _original_paths():
+def _original_paths() -> tuple[str, ...]:
     return tuple(os.path.join(BACKUP_DIR, f"original-{n}.bin") for n in ("config", "colours")) + (
-        os.path.join(BACKUP_DIR, "original.json"),)
+        os.path.join(BACKUP_DIR, "original.json"),
+    )
 
 
-def ensure_original(st, identity=""):
+def ensure_original(st: State, identity: str = "") -> None:
     """Keep one never-overwritten copy of the state from before the first save."""
     cfg_p, col_p, meta_p = _original_paths()
     if os.path.exists(cfg_p) and os.path.exists(col_p):
@@ -158,22 +184,22 @@ def ensure_original(st, identity=""):
         json.dump({"device": identity}, f)
 
 
-def oldest_backup():
+def oldest_backup() -> tuple[str, str] | None:
     cfg_p, col_p, _ = _original_paths()
     if os.path.exists(cfg_p) and os.path.exists(col_p):
         return cfg_p, col_p
     return _legacy_oldest()
 
 
-def parse_hex(text):
+def parse_hex(text: str) -> tuple[int, ...]:
     m = re.fullmatch(r"#?([0-9a-fA-F]{6})", text.strip())
     if not m:
         raise ValueError("colour must be RRGGBB")
     h = m.group(1)
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
 
 
-def read_state(kb):
+def read_state(kb: Keyboard) -> State:
     cfg = kb.read_page(0x83, 0xC6)
     validate(cfg)
     col = kb.read_page(0x88, 0xC8)
@@ -181,11 +207,18 @@ def read_state(kb):
     return State(cfg, col)
 
 
-def _changed(before, after):
+def _changed(before: Buf, after: Buf) -> list[int]:
     return [i for i in range(2, BLOCK) if before[i] != after[i]]
 
 
-def _write_blocks(kb, cfg_before, cfg_after, col_before=None, col_after=None, allowed=None):
+def _write_blocks(
+    kb: Keyboard,
+    cfg_before: Buf,
+    cfg_after: Buf,
+    col_before: Buf = b"",
+    col_after: Buf | None = None,
+    allowed: tuple[set[int], set[int]] | None = None,
+) -> tuple[list[int], list[int]]:
     """Write changed blocks. At most MAX_CHANGED bytes per block may differ, unless `allowed` names the
     (config offsets, colour offsets) that are permitted to change."""
     cfg_d = _changed(cfg_before, cfg_after)
@@ -197,7 +230,7 @@ def _write_blocks(kb, cfg_before, cfg_after, col_before=None, col_after=None, al
     if too_many:
         raise DeviceError("refusing to write: more bytes would change than expected")
     if col_d:
-        kb.write_page(0x08, 0xC8, 0x40, col_after[8:])
+        kb.write_page(0x08, 0xC8, 0x40, cast(Buf, col_after)[8:])
         time.sleep(WRITE_GAP)
     if cfg_d or col_d:
         kb.write_page(0x03, 0xC6, 0x00, cfg_after[8:])
@@ -205,19 +238,26 @@ def _write_blocks(kb, cfg_before, cfg_after, col_before=None, col_after=None, al
     return cfg_d, col_d
 
 
-def _read_back(kb, cfg_d, cfg_after, col_d, col_after):
+def _read_back(kb: Keyboard, cfg_d: list[int], cfg_after: Buf, col_d: list[int], col_after: Buf) -> State:
     new = read_state(kb)
     if any(new.config[i] != cfg_after[i] for i in cfg_d) or any(new.colours[i] != col_after[i] for i in col_d):
         raise DeviceError("the keyboard did not keep the change; its settings may be unchanged")
     return new
 
 
-def _check_colour(colour):
+def _check_colour(colour: Sequence[int] | None) -> None:
     if colour is not None and not (len(colour) == 3 and all(isinstance(c, int) and 0 <= c <= 255 for c in colour)):
         raise DeviceError("colour must be three values from 0 to 255")
 
 
-def apply(effect, colour=None, colourful=None, speed=None, brightness=None, kb=None):
+def apply(
+    effect: int,
+    colour: Sequence[int] | None = None,
+    colourful: bool | None = None,
+    speed: int | None = None,
+    brightness: int | None = None,
+    kb: Keyboard | None = None,
+) -> State:
     """Unspecified settings keep the keyboard's current values."""
     if effect not in EFFECTS:
         raise DeviceError("effect must be 1-20")
@@ -254,7 +294,7 @@ def apply(effect, colour=None, colourful=None, speed=None, brightness=None, kb=N
             if cfg[i - 1] == COLOURFUL:
                 cfg[i - 1] = 0x00
             o = OFF_COLOUR + (effect - 1) * COLOUR_RECORD
-            col[o:o + 3] = bytes(colour)
+            col[o : o + 3] = bytes(colour)
         cfg_d, col_d = _write_blocks(kb, _as_write(st.config), cfg, st.colours, col)
         return _read_back(kb, cfg_d, cfg, col_d, col)
     finally:
@@ -262,12 +302,12 @@ def apply(effect, colour=None, colourful=None, speed=None, brightness=None, kb=N
             kb.close()
 
 
-def _as_write(config):
+def _as_write(config: Buf) -> bytes:
     """The write header differs from the read header only in byte 1, which is never compared."""
     return bytes(config[:1]) + b"\x03" + bytes(config[2:])
 
 
-def restore_first():
+def restore_first() -> State:
     """Restore the lighting settings (effect, speed, brightness, colours) saved before the first save.
 
     Only the lighting offsets are copied from the backup, so other settings and any difference in the
@@ -285,12 +325,14 @@ def restore_first():
     try:
         with open(_original_paths()[2]) as f:
             saved_device = json.load(f).get("device", "")
-    except (OSError, ValueError):
+    except OSError, ValueError:
         saved_device = ""
     with Keyboard() as kb:
         if saved_device and kb.identity and saved_device != kb.identity:
-            raise DeviceError("this backup was taken from a keyboard on a different USB port; "
-                              "plug the keyboard into that port, or delete original.json in the backup folder")
+            raise DeviceError(
+                "this backup was taken from a keyboard on a different USB port; "
+                "plug the keyboard into that port, or delete original.json in the backup folder"
+            )
         cur = read_state(kb)
         backup_pair(cur)
         cfg = bytearray(cur.config)

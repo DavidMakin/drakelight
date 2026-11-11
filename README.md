@@ -97,8 +97,8 @@ checked against a read-only dump of a real keyboard. Other open-source projects 
 ## Development
 
 ```
-python3 -m venv .venv && .venv/bin/pip install pytest ruff
-.venv/bin/pytest -q && .venv/bin/ruff check .
+uv sync
+uv run pytest -q && uv run ruff check .
 ```
 
 The GTK bindings come from your distro (`python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`), so the

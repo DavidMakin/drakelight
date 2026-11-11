@@ -125,8 +125,16 @@ def test_no_write_when_nothing_changes():
     assert kb.writes == []
 
 
-@pytest.mark.parametrize("kwargs", [{"effect": 0}, {"effect": 21}, {"effect": 9, "brightness": 5},
-                                    {"effect": 9, "speed": 0}, {"effect": 3, "colour": (1, 2, 3)}])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"effect": 0},
+        {"effect": 21},
+        {"effect": 9, "brightness": 5},
+        {"effect": 9, "speed": 0},
+        {"effect": 3, "colour": (1, 2, 3)},
+    ],
+)
 def test_invalid_arguments_rejected_before_any_write(kwargs):
     kb = FakeKeyboard()
     with pytest.raises(DeviceError):

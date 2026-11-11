@@ -3,40 +3,44 @@
 These are estimates of what the keyboard does, not a reproduction of its firmware.
 key_colour() returns an (r, g, b) tuple in 0..1 for one key at time t.
 """
+
 import colorsys
 import math
+from collections.abc import Sequence
 
 SPEED = {1: 0.6, 2: 1.0, 3: 1.5, 4: 2.2}
 TAU = 2 * math.pi
 
+Rgb = tuple[float, float, float]
 
-def rnd(a, b=0):
+
+def rnd(a: int, b: int = 0) -> float:
     n = (a * 374761393 + b * 668265263 + 0x9E3779B9) & 0xFFFFFFFF
     n = ((n ^ (n >> 13)) * 1274126177) & 0xFFFFFFFF
     return ((n ^ (n >> 16)) & 0xFFFF) / 65535.0
 
 
-def hsv(h, s=1.0, v=1.0):
+def hsv(h: float, s: float = 1.0, v: float = 1.0) -> Rgb:
     return colorsys.hsv_to_rgb(h % 1.0, s, v)
 
 
-def scale(c, k):
+def scale(c: Rgb, k: float) -> Rgb:
     return (c[0] * k, c[1] * k, c[2] * k)
 
 
-def lerp(a, b, f):
-    return tuple(a[i] + (b[i] - a[i]) * f for i in range(3))
+def lerp(a: Rgb, b: Rgb, f: float) -> Rgb:
+    return (a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f)
 
 
 class Look:
     """base: (r,g,b) 0..255 single colour; palette: list of 0..255 colours used when colourful."""
 
-    def __init__(self, base, colourful, palette):
-        self.base = tuple(c / 255 for c in base)
+    def __init__(self, base: Sequence[int], colourful: bool, palette: Sequence[Sequence[int]]) -> None:
+        self.base: Rgb = (base[0] / 255, base[1] / 255, base[2] / 255)
         self.colourful = colourful and bool(palette)
-        self.pal = [tuple(c / 255 for c in p) for p in palette] or [self.base]
+        self.pal: list[Rgb] = [(p[0] / 255, p[1] / 255, p[2] / 255) for p in palette] or [self.base]
 
-    def at(self, u, smooth=False):
+    def at(self, u: float, smooth: bool = False) -> Rgb:
         if not self.colourful:
             return self.base
         n = len(self.pal)
@@ -46,15 +50,17 @@ class Look:
         return lerp(self.pal[i % n], self.pal[(i + 1) % n], u - i)
 
 
-def angle(x, y):
+def angle(x: float, y: float) -> float:
     return math.atan2((y - 0.5), (x - 0.5) * 3.2) / TAU
 
 
-def dist(x, y, cx=0.5, cy=0.5):
+def dist(x: float, y: float, cx: float = 0.5, cy: float = 0.5) -> float:
     return math.hypot((x - cx) * 3.2, (y - cy)) / 1.9
 
 
-def key_colour(effect, look, x, y, idx, row, col, t, ncols=15):
+def key_colour(
+    effect: int, look: Look, x: float, y: float, idx: int, row: int, col: int, t: float, ncols: int = 15
+) -> Rgb:
     """x, y in 0..1 across the board; idx unique key id; t already speed-scaled."""
     if effect == 1:
         return look.at(t * 0.3, True)

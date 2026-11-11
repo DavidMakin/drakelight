@@ -18,7 +18,7 @@ Architecture: all
 Installed-Size: ${SIZE}
 Maintainer: ${MAINTAINER}
 Homepage: ${HOMEPAGE}
-Depends: python3 (>= 3.9), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.10), gir1.2-adw-1 (>= 1.5)
+Depends: python3 (>= 3.14), python3-gi, python3-gi-cairo, gir1.2-gtk-4.0 (>= 4.10), gir1.2-adw-1 (>= 1.5)
 Recommends: pkexec | policykit-1
 Description: ${DESCRIPTION}
  Choose onboard lighting effects, colours, brightness and speed for a wired

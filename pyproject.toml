@@ -7,8 +7,11 @@ name = "drakelight"
 dynamic = ["version"]
 description = "Keyboard lighting control for the Redragon K631"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.14"
 license = { text = "MIT" }
+
+[dependency-groups]
+dev = ["ruff>=0.17.4", "pytest>=8.0", "mypy>=1.13"]
 
 [project.scripts]
 drakelight = "drakelight.cli:main"
@@ -24,7 +27,7 @@ drakelight = ["data/*"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -32,3 +35,12 @@ per-file-ignores = { "drakelight/gui_gtk.py" = ["E402"], "drakelight/cli.py" = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["drakelight"]
+
+[[tool.mypy.overrides]]
+module = ["gi", "gi.*", "cairo"]
+ignore_missing_imports = true

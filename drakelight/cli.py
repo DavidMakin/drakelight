@@ -6,14 +6,14 @@ from . import __version__, lighting
 from .hidraw import DeviceError, Keyboard
 
 
-def _hex(s):
+def _hex(s: str) -> tuple[int, ...]:
     try:
         return lighting.parse_hex(s)
     except ValueError as e:
         raise argparse.ArgumentTypeError(str(e)) from None
 
 
-def _restore_host_env():
+def _restore_host_env() -> None:
     """Undo the AppImage's library and Python overrides so programs we launch see the host environment."""
     if "DRAKELIGHT_HOST_LD_LIBRARY_PATH" not in os.environ:
         return
@@ -26,7 +26,7 @@ def _restore_host_env():
         os.environ.pop(var, None)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     _restore_host_env()
     ap = argparse.ArgumentParser(prog="drakelight")
     ap.add_argument("--version", action="version", version=f"drakelight {__version__}")
@@ -50,28 +50,34 @@ def main(argv=None):
             try:
                 from .gui_gtk import run
             except (ImportError, ValueError) as e:
-                print(f"error: GTK 4 / libadwaita Python bindings missing ({e}). "
-                      "Install python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1.")
+                print(
+                    f"error: GTK 4 / libadwaita Python bindings missing ({e}). "
+                    "Install python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1."
+                )
                 return 1
             return run()
         if a.cmd == "check":
             import gi
+
             gi.require_version("Gtk", "4.0")
             gi.require_version("Adw", "1")
             import cairo  # noqa: F401
             from gi.repository import Adw, Gtk
-            print(f"ok: GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}, "
-                  f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}")
+
+            print(
+                f"ok: GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}, "
+                f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}"
+            )
             return 0
         if a.cmd == "setup-access":
             from . import access
+
             access.install_rule()
             print("udev rule installed. Replug the keyboard if it is still not accessible.")
             return 0
         if a.cmd == "effects":
             for m in lighting.EFFECTS:
-                print(f"{m:2d}  {lighting.effect_name(m)}"
-                      f"{'  (colour)' if m in lighting.COLOUR_EFFECTS else ''}")
+                print(f"{m:2d}  {lighting.effect_name(m)}{'  (colour)' if m in lighting.COLOUR_EFFECTS else ''}")
         elif a.cmd == "status":
             with Keyboard() as kb:
                 print(json.dumps(lighting.read_state(kb).as_dict(), indent=2))
@@ -81,7 +87,7 @@ def main(argv=None):
                     d = kb.read_page(cmd, page)
                     print(f"--- {name} ({len(d)} bytes)")
                     for i in range(0, 256, 16):
-                        print(f"{i:04x}  {d[i:i + 16].hex(' ')}")
+                        print(f"{i:04x}  {d[i : i + 16].hex(' ')}")
         elif a.cmd == "set":
             st = lighting.apply(a.effect, a.colour, a.colourful, a.speed, a.brightness)
             print(json.dumps(st.as_dict(), indent=2))
@@ -90,3 +96,4 @@ def main(argv=None):
     except (DeviceError, RuntimeError) as e:
         print(f"error: {e}")
         return 1
+    return 0
